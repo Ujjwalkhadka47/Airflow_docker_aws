@@ -16,8 +16,8 @@ default_args = {
 
 # DAG 
 dag = DAG('hello_world_dag',
-          default_args=default_args,
-          schedule_interval=None)  # Set your desired schedule interval
+    default_args=default_args,
+    schedule_interval=None)  # Set your desired schedule interval
 
 # Python function
 def run_hello_world_script():
