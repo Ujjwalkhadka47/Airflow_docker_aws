@@ -11,9 +11,7 @@ from airflow.sensors.external_task_sensor import ExternalTaskSensor
 from airflow.operators.bash_operator import BashOperator
 from sqlalchemy import create_engine
 
-
 import pandas as pd
-
 
 from datetime import datetime, timedelta
 import requests
@@ -21,6 +19,8 @@ import csv
 import os
 import json
 
+# fetching data from API,
+# and saveing it as a JSON file.
 def save_posts(ti):
     base_url_api = 'https://jsonplaceholder.typicode.com/todos'  
 
@@ -31,7 +31,8 @@ def save_posts(ti):
         json.dump(response_data, f)
 
 
-# json to csv and csv to postgres(dump) using docker container
+# json to df and df to csv(save),
+# df to postgres(store)(database_url)
 def json_to_csv():
     df = pd.read_json('/opt/airflow/dags/data/api_data.json')
     df_team_flattened = pd.json_normalize(df)
@@ -40,8 +41,8 @@ def json_to_csv():
     
     database_url = 'postgresql://airflow:airflow@postgres:5432/airflow'
     engine = create_engine(database_url)
-    df.to_sql('api_data', engine, if_exists='replace', index=False)
-    
+    df.to_sql('airflow', engine, if_exists='replace', index=False)
+
 # DAG 
 with DAG(
     dag_id = "My_DAG",
@@ -69,25 +70,6 @@ with DAG(
         task_id = 'save_posts',
         python_callable=save_posts
     )
-
-    
-    # task_convert_to_csv = PythonOperator(
-        # task_id = 'convert_to_csv',
-        # python_callable=json_to_csv
-    # )
-
-    # move_file_task = BashOperator(
-    # task_id='move_file_to_tmp',
-    # bash_command='cp /opt/airflow/dags/data/api_data.csv /tmp && ls /tmp',  
-    #)
-
-    # task_load_to_postgres = PostgresOperator(
-    # task_id='load_to_postgres',
-    # postgres_conn_id='airflow_postgres',  
-    # sql="""
-    # COPY data(userId,id,title,completed) FROM '/tmp/api_data.csv' CSV HEADER;
-    # """
-    # )
     
     read_table_task = PostgresOperator(
         sql = "select * from airflow",
@@ -99,15 +81,15 @@ with DAG(
     def process_postgres_result(**kwargs):
         ti = kwargs['ti']
         result = ti.xcom_pull(task_ids='read_table_task')
-        # Process the result data here
-        for row in result:
-            print(row)
+        
+        for row in result:   # process and display each item 
+            print(row)       # prints each row to the console
             
     
     process_postgres_result = PythonOperator(
         task_id='process_postgres_result',
         python_callable=process_postgres_result,
-        provide_context=True
+        provide_context=True   # access to Airflow context & XCom data.
     )        
     
     is_api_active >> get_posts >> save_posts  >> read_table_task >> process_postgres_result
